@@ -1,7 +1,9 @@
 package com.courseupload;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.courseupload.config.JwtAuthenticationFilter;
 import com.courseupload.config.JwtUtil;
+import com.courseupload.config.SecurityConfig;
 import com.courseupload.controller.AuthController;
 import com.courseupload.dto.AuthDto;
 import com.courseupload.service.AuthService;
@@ -10,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -22,6 +25,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(AuthController.class)
+@Import({SecurityConfig.class, JwtAuthenticationFilter.class})
 @DisplayName("AuthController API Tests")
 class AuthControllerTest {
 
