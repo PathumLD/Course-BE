@@ -4,7 +4,6 @@ import com.courseupload.exception.FileStorageException;
 import com.courseupload.exception.InvalidFileException;
 import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.annotation.Profile;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
 import org.springframework.stereotype.Service;
@@ -18,11 +17,7 @@ import java.nio.file.*;
 import java.util.Set;
 import java.util.UUID;
 
-/**
- * Local disk storage implementation.
- * Active when app.storage.strategy=local (default).
- */
-@Service("localStorageService")
+@Service
 public class LocalStorageService implements StorageService {
 
     @Value("${app.upload.dir}")
@@ -34,15 +29,10 @@ public class LocalStorageService implements StorageService {
     private Path fileStoragePath;
 
     static final Set<String> ALLOWED_CONTENT_TYPES = Set.of(
-            "application/pdf",
-            "video/mp4",
-            "image/jpeg",
-            "image/png"
-    );
+            "application/pdf", "video/mp4", "image/jpeg", "image/png");
 
     static final Set<String> ALLOWED_EXTENSIONS = Set.of(
-            ".pdf", ".mp4", ".jpg", ".jpeg", ".png"
-    );
+            ".pdf", ".mp4", ".jpg", ".jpeg", ".png");
 
     @PostConstruct
     public void init() {
@@ -57,15 +47,13 @@ public class LocalStorageService implements StorageService {
     @Override
     public String store(MultipartFile file) {
         validateFile(file);
-
         String originalFilename = StringUtils.cleanPath(file.getOriginalFilename());
-        String fileExtension = getFileExtension(originalFilename);
-        String uniqueFileName = UUID.randomUUID().toString() + fileExtension;
-
+        String ext = getFileExtension(originalFilename);
+        String storedName = UUID.randomUUID() + ext;
         try {
-            Path targetLocation = this.fileStoragePath.resolve(uniqueFileName);
-            Files.copy(file.getInputStream(), targetLocation, StandardCopyOption.REPLACE_EXISTING);
-            return uniqueFileName;
+            Files.copy(file.getInputStream(), fileStoragePath.resolve(storedName),
+                    StandardCopyOption.REPLACE_EXISTING);
+            return storedName;
         } catch (IOException e) {
             throw new FileStorageException("Failed to store file: " + originalFilename, e);
         }
@@ -74,13 +62,10 @@ public class LocalStorageService implements StorageService {
     @Override
     public Resource load(String fileIdentifier) {
         try {
-            Path filePath = this.fileStoragePath.resolve(fileIdentifier).normalize();
+            Path filePath = fileStoragePath.resolve(fileIdentifier).normalize();
             Resource resource = new UrlResource(filePath.toUri());
-            if (resource.exists()) {
-                return resource;
-            } else {
-                throw new FileStorageException("File not found: " + fileIdentifier);
-            }
+            if (resource.exists()) return resource;
+            throw new FileStorageException("File not found: " + fileIdentifier);
         } catch (MalformedURLException e) {
             throw new FileStorageException("File not found: " + fileIdentifier, e);
         }
@@ -89,8 +74,7 @@ public class LocalStorageService implements StorageService {
     @Override
     public void delete(String fileIdentifier) {
         try {
-            Path filePath = this.fileStoragePath.resolve(fileIdentifier).normalize();
-            Files.deleteIfExists(filePath);
+            Files.deleteIfExists(fileStoragePath.resolve(fileIdentifier).normalize());
         } catch (IOException e) {
             throw new FileStorageException("Could not delete file: " + fileIdentifier, e);
         }
@@ -99,37 +83,23 @@ public class LocalStorageService implements StorageService {
     @Override
     public String buildFileUrl(String fileIdentifier) {
         return ServletUriComponentsBuilder.fromCurrentContextPath()
-                .path("/api/files/download/")
-                .path(fileIdentifier)
-                .toUriString();
+                .path("/api/files/download/").path(fileIdentifier).toUriString();
     }
 
     public void validateFile(MultipartFile file) {
-        if (file.isEmpty()) {
-            throw new InvalidFileException("Cannot upload an empty file.");
-        }
-        if (file.getSize() > maxFileSize) {
-            throw new InvalidFileException(
-                    "File size exceeds the maximum limit of " + (maxFileSize / 1024 / 1024) + "MB.");
-        }
+        if (file.isEmpty()) throw new InvalidFileException("Cannot upload an empty file.");
+        if (file.getSize() > maxFileSize)
+            throw new InvalidFileException("File exceeds maximum size of " + (maxFileSize / 1024 / 1024) + "MB.");
         String contentType = file.getContentType();
-        if (contentType == null || !ALLOWED_CONTENT_TYPES.contains(contentType.toLowerCase())) {
-            throw new InvalidFileException(
-                    "File type not allowed. Accepted types: PDF, MP4, JPG, PNG. Got: " + contentType);
-        }
-        String originalFilename = file.getOriginalFilename();
-        if (originalFilename == null) {
-            throw new InvalidFileException("File name cannot be null.");
-        }
-        String extension = getFileExtension(originalFilename).toLowerCase();
-        if (!ALLOWED_EXTENSIONS.contains(extension)) {
-            throw new InvalidFileException(
-                    "File extension not allowed. Accepted: .pdf, .mp4, .jpg, .jpeg, .png");
-        }
+        if (contentType == null || !ALLOWED_CONTENT_TYPES.contains(contentType.toLowerCase()))
+            throw new InvalidFileException("File type not allowed. Accepted: PDF, MP4, JPG, PNG.");
+        String ext = getFileExtension(file.getOriginalFilename() != null ? file.getOriginalFilename() : "").toLowerCase();
+        if (!ALLOWED_EXTENSIONS.contains(ext))
+            throw new InvalidFileException("File extension not allowed. Accepted: .pdf, .mp4, .jpg, .jpeg, .png");
     }
 
     public String getFileExtension(String filename) {
-        int dotIndex = filename.lastIndexOf('.');
-        return (dotIndex != -1) ? filename.substring(dotIndex) : "";
+        int dot = filename.lastIndexOf('.');
+        return (dot != -1) ? filename.substring(dot) : "";
     }
 }

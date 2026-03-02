@@ -3,7 +3,9 @@ package com.courseupload.service;
 import com.courseupload.dto.CourseContentDto;
 import com.courseupload.exception.ResourceNotFoundException;
 import com.courseupload.model.CourseContent;
+import com.courseupload.model.User;
 import com.courseupload.repository.CourseContentRepository;
+import com.courseupload.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
@@ -15,13 +17,14 @@ import java.util.stream.Collectors;
 @Service
 public class CourseContentService {
 
-    @Autowired
-    private CourseContentRepository courseContentRepository;
+    @Autowired private CourseContentRepository courseContentRepository;
+    @Autowired private StorageService storageService;
+    @Autowired private UserRepository userRepository;
 
-    @Autowired
-    private StorageService storageService; // @Primary bean — local or S3 depending on config
+    public CourseContentDto uploadFile(MultipartFile file, String description, String username) {
+        User owner = userRepository.findByUsername(username)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found: " + username));
 
-    public CourseContentDto uploadFile(MultipartFile file, String description) {
         String fileIdentifier = storageService.store(file);
         String fileUrl = storageService.buildFileUrl(fileIdentifier);
 
@@ -32,64 +35,58 @@ public class CourseContentService {
                 .fileSize(file.getSize())
                 .fileUrl(fileUrl)
                 .description(description)
+                .uploadedBy(owner)
                 .build();
 
-        CourseContent saved = courseContentRepository.save(content);
-        return toDto(saved);
+        return toDto(courseContentRepository.save(content));
     }
 
-    public List<CourseContentDto> getAllFiles() {
-        return courseContentRepository.findAllByOrderByUploadDateDesc()
-                .stream()
-                .map(this::toDto)
-                .collect(Collectors.toList());
+    public List<CourseContentDto> getAllFiles(String username) {
+        return courseContentRepository.findByUploadedByUsernameOrderByUploadDateDesc(username)
+                .stream().map(this::toDto).collect(Collectors.toList());
     }
 
-    public CourseContentDto getFileById(Long id) {
-        CourseContent content = courseContentRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("File not found with id: " + id));
-        return toDto(content);
+    public CourseContentDto getFileById(Long id, String username) {
+        return toDto(findByIdAndOwner(id, username));
     }
 
     public Resource downloadFile(String fileIdentifier) {
         return storageService.load(fileIdentifier);
     }
 
-    public void deleteFile(Long id) {
-        CourseContent content = courseContentRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("File not found with id: " + id));
+    public void deleteFile(Long id, String username) {
+        CourseContent content = findByIdAndOwner(id, username);
         storageService.delete(content.getFileName());
         courseContentRepository.delete(content);
     }
 
-    public List<CourseContentDto> getFilesByType(String type) {
-        return courseContentRepository.findByFileTypeContainingIgnoreCase(type)
-                .stream()
-                .map(this::toDto)
-                .collect(Collectors.toList());
+    public List<CourseContentDto> getFilesByType(String type, String username) {
+        return courseContentRepository
+                .findByFileTypeContainingIgnoreCaseAndUploadedByUsername(type, username)
+                .stream().map(this::toDto).collect(Collectors.toList());
     }
 
-    private CourseContentDto toDto(CourseContent content) {
-        String downloadUrl = storageService.buildFileUrl(content.getFileName());
+    private CourseContent findByIdAndOwner(Long id, String username) {
+        return courseContentRepository.findByIdAndUploadedByUsername(id, username)
+                .orElseThrow(() -> new ResourceNotFoundException("File not found with id: " + id));
+    }
 
+    private CourseContentDto toDto(CourseContent c) {
         return CourseContentDto.builder()
-                .id(content.getId())
-                .fileName(content.getFileName())
-                .originalFileName(content.getOriginalFileName())
-                .fileType(content.getFileType())
-                .fileSize(content.getFileSize())
-                .fileSizeFormatted(formatFileSize(content.getFileSize()))
-                .uploadDate(content.getUploadDate())
-                .fileUrl(content.getFileUrl())
-                .description(content.getDescription())
-                .downloadUrl(downloadUrl)
+                .id(c.getId()).fileName(c.getFileName())
+                .originalFileName(c.getOriginalFileName())
+                .fileType(c.getFileType()).fileSize(c.getFileSize())
+                .fileSizeFormatted(formatFileSize(c.getFileSize()))
+                .uploadDate(c.getUploadDate()).fileUrl(c.getFileUrl())
+                .description(c.getDescription())
+                .downloadUrl(storageService.buildFileUrl(c.getFileName()))
                 .build();
     }
 
-    private String formatFileSize(Long sizeInBytes) {
-        if (sizeInBytes < 1024) return sizeInBytes + " B";
-        if (sizeInBytes < 1024 * 1024) return String.format("%.1f KB", sizeInBytes / 1024.0);
-        if (sizeInBytes < 1024 * 1024 * 1024) return String.format("%.1f MB", sizeInBytes / (1024.0 * 1024));
-        return String.format("%.1f GB", sizeInBytes / (1024.0 * 1024 * 1024));
+    private String formatFileSize(Long bytes) {
+        if (bytes < 1024) return bytes + " B";
+        if (bytes < 1024 * 1024) return String.format("%.1f KB", bytes / 1024.0);
+        if (bytes < 1024L * 1024 * 1024) return String.format("%.1f MB", bytes / (1024.0 * 1024));
+        return String.format("%.1f GB", bytes / (1024.0 * 1024 * 1024));
     }
 }

@@ -15,10 +15,6 @@ public class AuthController {
     @Autowired
     private AuthService authService;
 
-    /**
-     * Register a new instructor
-     * POST /api/auth/register
-     */
     @PostMapping("/register")
     public ResponseEntity<ApiResponse<AuthDto.AuthResponse>> register(
             @Valid @RequestBody AuthDto.RegisterRequest request) {
@@ -26,10 +22,6 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.success(response, response.getMessage()));
     }
 
-    /**
-     * Login and get JWT token
-     * POST /api/auth/login
-     */
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<AuthDto.AuthResponse>> login(
             @Valid @RequestBody AuthDto.LoginRequest request) {

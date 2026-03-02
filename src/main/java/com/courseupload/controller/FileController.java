@@ -8,6 +8,8 @@ import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -20,80 +22,65 @@ public class FileController {
     @Autowired
     private CourseContentService courseContentService;
 
-    /**
-     * Upload a file (PDF, MP4, JPG, PNG)
-     * POST /api/files/upload
-     */
     @PostMapping("/upload")
     public ResponseEntity<ApiResponse<CourseContentDto>> uploadFile(
             @RequestParam("file") MultipartFile file,
-            @RequestParam(value = "description", required = false) String description) {
+            @RequestParam(value = "description", required = false) String description,
+            @AuthenticationPrincipal UserDetails userDetails) {
 
-        CourseContentDto uploaded = courseContentService.uploadFile(file, description);
+        CourseContentDto uploaded = courseContentService.uploadFile(file, description, userDetails.getUsername());
         return ResponseEntity.ok(ApiResponse.success(uploaded, "File uploaded successfully."));
     }
 
-    /**
-     * Get all uploaded file metadata
-     * GET /api/files
-     */
     @GetMapping
-    public ResponseEntity<ApiResponse<List<CourseContentDto>>> getAllFiles() {
-        List<CourseContentDto> files = courseContentService.getAllFiles();
+    public ResponseEntity<ApiResponse<List<CourseContentDto>>> getAllFiles(
+            @AuthenticationPrincipal UserDetails userDetails) {
+
+        List<CourseContentDto> files = courseContentService.getAllFiles(userDetails.getUsername());
         return ResponseEntity.ok(ApiResponse.success(files, "Files retrieved successfully."));
     }
 
-    /**
-     * Get a single file metadata by ID
-     * GET /api/files/{id}
-     */
     @GetMapping("/{id}")
-    public ResponseEntity<ApiResponse<CourseContentDto>> getFileById(@PathVariable Long id) {
-        CourseContentDto file = courseContentService.getFileById(id);
+    public ResponseEntity<ApiResponse<CourseContentDto>> getFileById(
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserDetails userDetails) {
+
+        CourseContentDto file = courseContentService.getFileById(id, userDetails.getUsername());
         return ResponseEntity.ok(ApiResponse.success(file, "File retrieved successfully."));
     }
 
-    /**
-     * Get files filtered by type
-     * GET /api/files?type=pdf
-     */
     @GetMapping("/filter")
     public ResponseEntity<ApiResponse<List<CourseContentDto>>> getFilesByType(
-            @RequestParam String type) {
-        List<CourseContentDto> files = courseContentService.getFilesByType(type);
+            @RequestParam String type,
+            @AuthenticationPrincipal UserDetails userDetails) {
+
+        List<CourseContentDto> files = courseContentService.getFilesByType(type, userDetails.getUsername());
         return ResponseEntity.ok(ApiResponse.success(files, "Files retrieved successfully."));
     }
 
-    /**
-     * Download a file by stored file name
-     * GET /api/files/download/{fileName}
-     */
     @GetMapping("/download/{fileName:.+}")
     public ResponseEntity<Resource> downloadFile(@PathVariable String fileName) {
         Resource resource = courseContentService.downloadFile(fileName);
-
         String contentType = "application/octet-stream";
-        String filename = resource.getFilename();
-        if (filename != null) {
-            if (filename.endsWith(".pdf")) contentType = "application/pdf";
-            else if (filename.endsWith(".mp4")) contentType = "video/mp4";
-            else if (filename.endsWith(".jpg") || filename.endsWith(".jpeg")) contentType = "image/jpeg";
-            else if (filename.endsWith(".png")) contentType = "image/png";
+        String name = resource.getFilename();
+        if (name != null) {
+            if (name.endsWith(".pdf")) contentType = "application/pdf";
+            else if (name.endsWith(".mp4")) contentType = "video/mp4";
+            else if (name.endsWith(".jpg") || name.endsWith(".jpeg")) contentType = "image/jpeg";
+            else if (name.endsWith(".png")) contentType = "image/png";
         }
-
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(contentType))
                 .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + resource.getFilename() + "\"")
                 .body(resource);
     }
 
-    /**
-     * Delete a file by ID
-     * DELETE /api/files/{id}
-     */
     @DeleteMapping("/{id}")
-    public ResponseEntity<ApiResponse<Object>> deleteFile(@PathVariable Long id) {
-        courseContentService.deleteFile(id);
+    public ResponseEntity<ApiResponse<Object>> deleteFile(
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserDetails userDetails) {
+
+        courseContentService.deleteFile(id, userDetails.getUsername());
         return ResponseEntity.ok(ApiResponse.success(null, "File deleted successfully."));
     }
 }

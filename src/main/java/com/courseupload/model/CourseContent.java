@@ -1,10 +1,7 @@
 package com.courseupload.model;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 import java.time.LocalDateTime;
 
@@ -40,6 +37,11 @@ public class CourseContent {
 
     @Column(name = "description", length = 500)
     private String description;
+
+    // Links this file to the user who uploaded it
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", nullable = false)
+    private User uploadedBy;
 
     @PrePersist
     protected void onCreate() {
